@@ -1,3 +1,8 @@
+# IDEA specific
+.DS_Store
+.idea/
+.idea_modules/
+
 *.class
 *.log
 
