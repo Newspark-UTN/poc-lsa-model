@@ -177,3 +177,6 @@ podrian
 podriais
 yo
 aquel
+que
+les
+haber
