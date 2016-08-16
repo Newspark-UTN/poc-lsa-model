@@ -6,10 +6,10 @@
   Once installed, use the `mongod` command to start mongo.
   Create a new db named `newspark` with collection `news` and user `newspark` by:
 
-  1) `mongo`
-  2) `use newspark`
-  3) `db.createCollection("news")`
-  4) ```
+  - `mongo`
+  - `use newspark`
+  - `db.createCollection("news")`
+  - ```
      db.createUser(
         {
           user: "newspark",
