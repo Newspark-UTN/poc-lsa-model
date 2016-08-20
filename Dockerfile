@@ -1,4 +1,4 @@
-FROM alanszp/alpine-scala-sbt
+FROM alanszp/alpine-scala-sbt-spark
 
 COPY ./ /opt/newspark
 
