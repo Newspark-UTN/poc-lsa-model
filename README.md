@@ -32,3 +32,9 @@
 
 ### Lemmatization
 - `sbt run` and select `Lemmatizer`
+
+## Docker
+
+- `eval $(docker-machine env newspark-dev)`
+- `${docker-utils-dir}/newspark sbt assembly`
+- `${docker-utils-dir}/newspark run`

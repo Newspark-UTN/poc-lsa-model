@@ -4,4 +4,6 @@ COPY ./ /opt/newspark
 
 WORKDIR /opt/newspark
 
-RUN sbt compile
+ENV SBT_OPTS "-Xms1024m -XX:MaxPermSize=1024m -Xmx4G -XX:+UseConcMarkSweepGC -XX:InitialCodeCacheSize=64m -XX:ReservedCodeCacheSize=1024m -XX:+CMSClassUnloadingEnabled"
+
+RUN sbt assembly

@@ -1,20 +1,19 @@
-package org.edu.utn
+package org.edu.utn.newspark
 
+import java.lang.Character.isLetter
 import java.text.Normalizer
-import Character.isLetter
 import java.util.Properties
 
 import edu.stanford.nlp.ling.CoreAnnotations.{LemmaAnnotation, SentencesAnnotation, TokensAnnotation}
 import edu.stanford.nlp.pipeline.{Annotation, StanfordCoreNLP}
 
-import scala.collection.mutable
-import scalaz.syntax.std.boolean._
 import scala.collection.JavaConverters._
+import scalaz.syntax.std.boolean._
 
 /**
  * We should place functions that will likely be used across the project.
  */
-package object newspark {
+package object lsa {
 
   /**
    * Function that takes a word and removes the "es" and "s" for the moment
@@ -62,7 +61,7 @@ package object newspark {
    * @param stopwords a set of words we don't want inside the text.
    * @return a collection of clean tokens.
    */
-  def plainTextToLemmas(content: String, stopwords: Set[String]): mutable.Buffer[String] = {
+  def plainTextToLemmas(content: String, stopwords: Set[String]): Seq[String] = {
     val doc = new Annotation(content)
     LemmaPipeline.annotate(doc)
 
