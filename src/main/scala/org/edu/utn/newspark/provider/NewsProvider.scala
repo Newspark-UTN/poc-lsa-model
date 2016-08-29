@@ -7,9 +7,12 @@ import scala.io.Source
 /**
  * Generic news provider
  */
-sealed trait NewsProvider {
+trait Stopwords {
   private val stopWordsFile = Source.fromInputStream(getClass.getResourceAsStream("/stopwords.txt"))
   val stopwords = try stopWordsFile.getLines.toSet finally stopWordsFile.close()
+}
+
+sealed trait NewsProvider extends Stopwords {
   def retrieveNews: List[News]
 }
 

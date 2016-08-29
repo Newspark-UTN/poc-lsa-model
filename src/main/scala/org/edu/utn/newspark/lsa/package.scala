@@ -16,7 +16,7 @@ import scalaz.syntax.std.boolean._
 package object lsa {
 
   /**
-   * Function that takes a word and removes the "es" and "s" for the moment
+   * Function that takes a word and removes the "es" for the moment
    * naively to conform a rooting technique
    *
    * Example: "Marcadores" will be rooted to "marcador"
