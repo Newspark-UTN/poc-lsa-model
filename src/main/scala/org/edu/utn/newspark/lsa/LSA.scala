@@ -8,20 +8,19 @@ import org.edu.utn.newspark.provider.MongoNewsProvider
 import scala.collection.mutable
 
 object LSA extends MongoNewsProvider with App {
-  val conf = new SparkConf().setAppName("LSA Newspark")
+  val conf = new SparkConf()
+    .setMaster("local[4]")
+    .setAppName("LSA Newspark")
   val sc = new SparkContext(conf)
 
   val allNews: List[News] = retrieveNews
   val numDocs = allNews.length
 
   // Lift to a parallel RDD
-  val withoutLemmaRDD: RDD[News] = sc.parallelize(retrieveNews)
+  val withoutLemmaRDD: RDD[News] = sc.parallelize(allNews)
 
   // Clean all the documents
   val lemmatizedRDD: RDD[Seq[String]] = withoutLemmaRDD collect { case News(_, content) => plainTextToLemmas(content, stopwords) }
-
-  println("PRINTING LEMMATIZED")
-  lemmatizedRDD.collect.foreach(println)
 
   // Create a new rdd with the wordcounts (term, how many times the term appears in the document) of all documents.
   val docTermFrequencies: RDD[mutable.HashMap[String, Int]] = lemmatizedRDD map {terms =>
@@ -75,11 +74,26 @@ object LSA extends MongoNewsProvider with App {
   val documentFrequencies: mutable.HashMap[String, Int] = docTermFrequencies.aggregate(zero)(mergeDocumentFrequencies, combinePartialDocumentFrequencies)
 
   // Generate the inverse document frequencies
-  val idfs: mutable.HashMap[String, Double] = documentFrequencies map { case (term, docCount) =>
+  val idfs: mutable.HashMap[Term, IDF] = documentFrequencies map { case (term, docCount) =>
     (term, math.log(numDocs.toDouble / docCount))
   }
 
-  docTermFrequencies.collect.foreach(println)
+  val termIds: Map[Term, Index] = idfs.keys.zipWithIndex.toMap
 
-  println("idfs: " + idfs.mkString(" "))
+  // Broadcast this map in order to have it available through all the executors, together with idfs.
+  val broadcastTermIds = sc.broadcast(termIds).value
+  val broadcastIdfs = sc.broadcast(idfs).value
+
+  // Create the term document matrix
+  import org.apache.spark.mllib.linalg.Vectors
+
+  val termDocMatrix = docTermFrequencies map { document =>
+    val documentLength = document.values.sum
+    val document_TF_IDFS: Seq[(Index, TF_IDF)] = document.collect {
+      case (term, count) if broadcastTermIds.contains(term) =>
+        // tuples of the form (index, idf-tf)
+        (broadcastTermIds(term), broadcastIdfs(term) * document(term) / documentLength)
+    }.toSeq
+    Vectors.sparse(broadcastTermIds.size, document_TF_IDFS)
+  }
 }

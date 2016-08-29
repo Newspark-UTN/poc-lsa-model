@@ -15,6 +15,11 @@ import scalaz.syntax.std.boolean._
  */
 package object lsa {
 
+  type Term = String
+  type Index = Int
+  type IDF = Double
+  type TF_IDF = Double
+
   /**
    * Function that takes a word and removes the "es" for the moment
    * naively to conform a rooting technique
