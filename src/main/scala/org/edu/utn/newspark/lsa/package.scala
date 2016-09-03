@@ -6,6 +6,8 @@ import java.util.Properties
 
 import edu.stanford.nlp.ling.CoreAnnotations.{LemmaAnnotation, SentencesAnnotation, TokensAnnotation}
 import edu.stanford.nlp.pipeline.{Annotation, StanfordCoreNLP}
+import org.apache.spark.mllib.linalg.{Matrix, SingularValueDecomposition}
+import org.apache.spark.mllib.linalg.distributed.RowMatrix
 
 import scala.collection.JavaConverters._
 import scalaz.syntax.std.boolean._
@@ -19,6 +21,7 @@ package object lsa {
   type Index = Int
   type IDF = Double
   type TF_IDF = Double
+  type SVD = SingularValueDecomposition[RowMatrix, Matrix]
 
   /**
    * Function that takes a word and removes the "es" for the moment

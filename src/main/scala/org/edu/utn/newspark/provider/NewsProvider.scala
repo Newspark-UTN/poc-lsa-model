@@ -23,7 +23,7 @@ class FileNewsProvider extends NewsProvider {
   def retrieveNews =
     newsFromFile
       .grouped(2)
-      .map{ case title :: content :: Nil => News(title, content) }
+      .map{ case title :: tag :: content :: Nil => News(title, tag, content) }
       .toList
 }
 

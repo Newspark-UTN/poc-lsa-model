@@ -7,9 +7,9 @@ import org.edu.utn.newspark.provider.{FileNewsProvider, MongoNewsProvider}
   *
   * @author tom
   */
-final case class News(title: String, content: String)
-final case class MongoContent(content: String, link: String, title: String, source: String) {
-  def toNews = News(title, content)
+final case class News(title: String, tag: String, content: String)
+final case class MongoContent(content: String, link: String, title: String, tag: String, source: String) {
+  def toNews = News(title, tag, content)
 }
 
 object FileLemmatizer extends FileNewsProvider {
