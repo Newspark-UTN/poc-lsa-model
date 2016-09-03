@@ -3,6 +3,9 @@
 .idea/
 .idea_modules/
 
+main.iml
+test.iml
+
 *.class
 *.log
 
@@ -16,7 +19,3 @@ lib_managed/
 src_managed/
 project/boot/
 project/plugins/project/
-
-# Scala-IDE specific
-.scala_dependencies
-.worksheet
