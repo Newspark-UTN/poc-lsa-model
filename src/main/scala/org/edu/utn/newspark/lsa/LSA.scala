@@ -110,8 +110,6 @@ object LSA extends MongoNewsProvider with App {
     termDocMatrix.cache()
     val mat = new RowMatrix(termDocMatrix)
     val svd = mat.computeSVD(K, computeU = true)
-    svd.U
-    svd.V
     (svd, tag, termIds, docIds)
   }.toSeq
 
