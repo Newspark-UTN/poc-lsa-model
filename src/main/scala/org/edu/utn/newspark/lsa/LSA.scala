@@ -25,103 +25,108 @@ object LSA extends MongoNewsProvider with App {
   val allNews: List[News] = retrieveNews
 
   // For each tag, calculate svd, termIds, and docIds
-  val LSARuns: Seq[(SVD, String, Map[Term, Index], Map[Long, String], Map[Long, mutable.HashMap[String, Int]])] = allNews.groupBy(news => news.tag).map { case (tag, newsPerTag) =>
+  val LSARuns: Seq[(SVD, Tag, Map[Term, Index], Map[Long, String], Map[Long, mutable.HashMap[String, Int]])] =
 
-    val numDocs = newsPerTag.length
+    allNews.groupBy(_.tag).map { case (tag, newsPerTag) =>
 
-    // Lift to a parallel RDD
-    val withoutLemmaRDD: RDD[News] = sc.parallelize(newsPerTag)
+      val numDocs = newsPerTag.length
 
-    // Clean all the documents
-    val lemmatizedRDD: RDD[(String, Seq[String])] = withoutLemmaRDD collect { case News(title, _, content) => (title, plainTextToLemmas(content, stopwords)) }
+      // Lift to a parallel RDD
+      val withoutLemmaRDD: RDD[News] = sc.parallelize(newsPerTag)
 
-    val docTermFrequencies = lemmatizedRDD.mapValues(terms => {
-      val termFreqsInDoc = terms.foldLeft(new mutable.HashMap[String, Int]()) {
-        (map, term) => map += term -> (map.getOrElse(term, 0) + 1)
+      // Clean all the documents
+      val lemmatizedRDD: RDD[(Title, Seq[String])] = withoutLemmaRDD collect { case News(title, _, content) => (title, plainTextToLemmas(content, stopwords)) }
+
+      val docTermFrequencies: RDD[(Title, mutable.HashMap[String, Int])] = lemmatizedRDD.mapValues(terms => {
+        val termFreqsInDoc = terms.foldLeft(new mutable.HashMap[String, Int]()) {
+          (map, term) => map += term -> (map.getOrElse(term, 0) + 1)
+        }
+        termFreqsInDoc
+      })
+
+      // We will cache this in memory since we are going to use it 2 times:
+      // to calculate idfs and term document matrix
+      docTermFrequencies.cache()
+
+      // Identify each title with an id for later usage
+      val docIds: Map[Long, Title] = docTermFrequencies.map(_._1).zipWithUniqueId().map(_.swap).collectAsMap().toMap
+      // Identify also each word count (each document) with an id for later usage on grouping
+      val docCorpus: Map[Long, mutable.HashMap[String, Int]] = docTermFrequencies.map(_._2).zipWithUniqueId().map(_.swap).collectAsMap().toMap
+
+      /** CALCULATION OF DOCUMENT FREQUENCIES */
+
+      // This will be our accumulator for the document frequencies
+      val zero = new mutable.HashMap[String, Int]()
+
+      /**
+        * Counts the number of times each word of the tfs appears on all the corpus.
+        * This happens in parallel in each of our mappers.
+        *
+        * @param dfs the acum df map
+        * @param tfs the termFrequencies of a single document of the rdd we cached before.
+        * @return the partial dfs result in the mapper executing the merge.
+        */
+      def mergeDocumentFrequencies(dfs: mutable.HashMap[Term, Int], tfs: (Title, mutable.HashMap[String, Int])): mutable.HashMap[String, Int] = {
+        tfs._2.keySet.foreach { term =>
+          dfs += term -> (dfs.getOrElse(term, 0) + 1)
+        }
+        dfs
       }
-      termFreqsInDoc
-    })
 
-    // We will cache this in memory since we are going to use it 2 times:
-    // to calculate idfs and term document matrix
-    docTermFrequencies.cache()
-
-    val docIds: Map[Long, String] = docTermFrequencies.map(_._1).zipWithUniqueId().map(_.swap).collectAsMap().toMap
-    val docCorpus: Map[Long, mutable.HashMap[String, Int]] = docTermFrequencies.map(_._2).zipWithUniqueId().map(_.swap).collectAsMap().toMap
-
-    // This will be our accumulator for the document frequencies
-    val zero = new mutable.HashMap[String, Int]()
-
-    /**
-      * Counts the number of times each word of the tfs appears on all the corpus.
-      * This happens in parallel in each of our mappers.
-      *
-      * @param dfs the acum df map
-      * @param tfs the termFrequencies of a single document of the rdd we cached before.
-      * @return the partial dfs result in the mapper executing the merge.
-      */
-    def mergeDocumentFrequencies(dfs: mutable.HashMap[String, Int], tfs: (String, mutable.HashMap[String, Int])): mutable.HashMap[String, Int] = {
-      tfs._2.keySet.foreach { term =>
-        dfs += term -> (dfs.getOrElse(term, 0) + 1)
+      /**
+        * Combines both partial dfs from the mappers into 1, reducing the computation we did before.
+        *
+        * @param dfs1 a partial dfs from mapper 1
+        * @param dfs2 another partial dfs from mapper 2
+        * @return the resulting map from the combination of both dfs1 and dfs2
+        */
+      def combinePartialDocumentFrequencies(dfs1: mutable.HashMap[String, Int], dfs2: mutable.HashMap[String, Int]): mutable.HashMap[String, Int] = {
+        dfs2.foreach { case (term, count) =>
+          dfs1 += term -> (dfs1.getOrElse(term, 0) + count)
+        }
+        dfs1
       }
-      dfs
-    }
 
-    /**
-      * Combines both partial dfs from the mappers into 1, reducing the computation we did before.
-      *
-      * @param dfs1 a partial dfs from mapper 1
-      * @param dfs2 another partial dfs from mapper 2
-      * @return the resulting map from the combination of both dfs1 and dfs2
-      */
-    def combinePartialDocumentFrequencies(dfs1: mutable.HashMap[String, Int], dfs2: mutable.HashMap[String, Int]): mutable.HashMap[String, Int] = {
-      dfs2.foreach { case (term, count) =>
-        dfs1 += term -> (dfs1.getOrElse(term, 0) + count)
+      // Next, create a document frequency rdd of the form (term, number of documents in which the term appears)
+      val documentFrequencies: mutable.HashMap[Term, Int] = docTermFrequencies.aggregate(zero)(mergeDocumentFrequencies, combinePartialDocumentFrequencies)
+
+      // Generate the inverse document frequencies
+      val idfs: mutable.HashMap[Term, IDF] = documentFrequencies map {
+        case (term, docCount) => (term, math.log(numDocs.toDouble / docCount))
       }
-      dfs1
-    }
 
-    // Next, create a document frequency rdd of the form (term, number of documents in which it appears)
-    val documentFrequencies: mutable.HashMap[String, Int] = docTermFrequencies.aggregate(zero)(mergeDocumentFrequencies, combinePartialDocumentFrequencies)
+      val termIds: Map[Term, Index] = idfs.keys.zipWithIndex.toMap
 
-    // Generate the inverse document frequencies
-    val idfs: mutable.HashMap[Term, IDF] = documentFrequencies map {
-      case (term, docCount) => (term, math.log(numDocs.toDouble / docCount))
-    }
+      // Broadcast this map in order to have it available through all the executors, together with idfs.
+      val broadcastTermIds = sc.broadcast(termIds).value
+      val broadcastIdfs = sc.broadcast(idfs).value
 
-    val termIds: Map[Term, Index] = idfs.keys.zipWithIndex.toMap
+      // Create the term document matrix
+      import org.apache.spark.mllib.linalg.Vectors
 
-    // Broadcast this map in order to have it available through all the executors, together with idfs.
-    val broadcastTermIds = sc.broadcast(termIds).value
-    val broadcastIdfs = sc.broadcast(idfs).value
+      val termDocMatrix = docTermFrequencies map { case (_, document) =>
+        val documentTotalTerms = document.values.sum
+        val document_TF_IDFS: Seq[(Index, TF_IDF)] = document.collect {
+          case (term, count) if broadcastTermIds.contains(term) && broadcastIdfs.contains(term) =>
+            // tuples of the form (index, idf-tf)
+            (broadcastTermIds(term), broadcastIdfs(term) * document(term) / documentTotalTerms)
+        }.toSeq
+        Vectors.sparse(broadcastTermIds.size, document_TF_IDFS)
+      }
 
-    // Create the term document matrix
-    import org.apache.spark.mllib.linalg.Vectors
+      termDocMatrix.cache()
 
-    val termDocMatrix = docTermFrequencies map { case (_, document) =>
-      val documentTotalTerms = document.values.sum
-      val document_TF_IDFS: Seq[(Index, TF_IDF)] = document.collect {
-        case (term, count) if broadcastTermIds.contains(term) && broadcastIdfs.contains(term) =>
-          // tuples of the form (index, idf-tf)
-          (broadcastTermIds(term), broadcastIdfs(term) * document(term) / documentTotalTerms)
-      }.toSeq
-      Vectors.sparse(broadcastTermIds.size, document_TF_IDFS)
-    }
+      val mat = new RowMatrix(termDocMatrix)
+      val svd = mat.computeSVD(K, computeU = true)
 
-    termDocMatrix.cache()
-    val mat = new RowMatrix(termDocMatrix)
-    val svd = mat.computeSVD(K, computeU = true)
-
-    (svd, tag, termIds, docIds, docCorpus)
-  }.toSeq
+      (svd, tag, termIds, docIds, docCorpus)
+    }.toSeq
 
     def docsWhichContainsTerms(results: Seq[(Seq[(String, Double, Int)], Seq[(String, Double, Long)])],
                                documents:  Map[Long, mutable.HashMap[String, Int]])
     : Seq[(Seq[(String, Double, Int)], Seq[(String, Double, Long)])] = {
       results.map {
         case (terms, docs) =>
-          val termsStrings = terms.map(_._1)
-
           val filterDocs = docs.filter {
             case (_, _, id) =>
               val frequencies = documents.getOrElse(id, new mutable.HashMap[String, Int]())
@@ -129,7 +134,6 @@ object LSA extends MongoNewsProvider with App {
                 case (term, _, _) => frequencies.contains(term)
               }
           }
-
           (terms, filterDocs)
       }
     }
