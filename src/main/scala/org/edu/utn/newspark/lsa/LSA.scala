@@ -25,7 +25,7 @@ object LSA extends MongoNewsProvider with App {
   val allNews: List[News] = retrieveNews
 
   // For each tag, calculate svd, termIds, and docIds
-  val LSARuns: Seq[(SVD, String, Map[Term, Index], Map[Long, String])] = allNews.groupBy(news => news.tag).map { case (tag, newsPerTag) =>
+  val LSARuns: Seq[(SVD, String, Map[Term, Index], Map[Long, String], Map[Long, mutable.HashMap[String, Int]])] = allNews.groupBy(news => news.tag).map { case (tag, newsPerTag) =>
 
     val numDocs = newsPerTag.length
 
@@ -47,6 +47,7 @@ object LSA extends MongoNewsProvider with App {
     docTermFrequencies.cache()
 
     val docIds: Map[Long, String] = docTermFrequencies.map(_._1).zipWithUniqueId().map(_.swap).collectAsMap().toMap
+    val docCorpus: Map[Long, mutable.HashMap[String, Int]] = docTermFrequencies.map(_._2).zipWithUniqueId().map(_.swap).collectAsMap().toMap
 
     // This will be our accumulator for the document frequencies
     val zero = new mutable.HashMap[String, Int]()
@@ -110,22 +111,41 @@ object LSA extends MongoNewsProvider with App {
     termDocMatrix.cache()
     val mat = new RowMatrix(termDocMatrix)
     val svd = mat.computeSVD(K, computeU = true)
-    (svd, tag, termIds, docIds)
+
+    (svd, tag, termIds, docIds, docCorpus)
   }.toSeq
 
+    def docsWhichContainsTerms(results: Seq[(Seq[(String, Double, Int)], Seq[(String, Double, Long)])],
+                               documents:  Map[Long, mutable.HashMap[String, Int]])
+    : Seq[(Seq[(String, Double, Int)], Seq[(String, Double, Long)])] = {
+      results.map {
+        case (terms, docs) =>
+          val termsStrings = terms.map(_._1)
+
+          val filterDocs = docs.filter {
+            case (_, _, id) =>
+              val frequencies = documents.getOrElse(id, new mutable.HashMap[String, Int]())
+              terms.forall {
+                case (term, _, _) => frequencies.contains(term)
+              }
+          }
+
+          (terms, filterDocs)
+      }
+    }
 
     def topTermsInTopConcepts(svd: SingularValueDecomposition[RowMatrix, Matrix],
                               numConcepts: Int, numTerms: Int, termIds: Map[Long, String])
-    : Seq[Seq[(String, Double)]] = {
+    : Seq[Seq[(String, Double, Int)]] = {
       val v = svd.V
-      val topTerms = new ArrayBuffer[Seq[(String, Double)]]()
+      val topTerms = new ArrayBuffer[Seq[(String, Double, Int)]]()
       val arr = v.toArray
       for (i <- 0 until numConcepts) {
         val offs = i * v.numRows
         val termWeights = arr.slice(offs, offs + v.numRows).zipWithIndex
         val sorted = termWeights.sortBy(-_._1)
         topTerms += sorted.take(numTerms).map {
-          case (score, id) => (termIds(id), score)
+          case (score, id) => (termIds(id), score, id)
         }
       }
       topTerms
@@ -133,29 +153,34 @@ object LSA extends MongoNewsProvider with App {
 
     def topDocsInTopConcepts(svd: SingularValueDecomposition[RowMatrix, Matrix],
                              numConcepts: Int, numDocs: Int, docIds: scala.collection.Map[Long, String])
-    : Seq[Seq[(String, Double)]] = {
+    : Seq[Seq[(String, Double, Long)]] = {
       val u = svd.U
-      val topDocs = new ArrayBuffer[Seq[(String, Double)]]()
+      val topDocs = new ArrayBuffer[Seq[(String, Double, Long)]]()
       for (i <- 0 until numConcepts) {
         val docWeights = u.rows.map(_.toArray(i)).zipWithUniqueId
         topDocs += docWeights.top(numDocs).map {
-          case (score, id) => (docIds(id), score)
+          case (score, id) => (docIds(id), score, id)
         }
       }
       topDocs
     }
 
-  LSARuns.map { case (svd, tag, termIds, docIds) =>
+  LSARuns.map { case (svd, tag, termIds, docIds, fullDocs) =>
     val topConceptTerms = topTermsInTopConcepts(svd, topConcepts, topTerms, termIds.map { case (term, index) => (index.toLong, term) })
     val topConceptDocs = topDocsInTopConcepts(svd, topConcepts, topDocuments, docIds)
-    (tag, topConceptDocs, topConceptTerms)
-  }.foreach { case  (tag, topConceptDocs, topConceptTerms) =>
+    val results = docsWhichContainsTerms(topConceptTerms.zip(topConceptDocs), fullDocs)
+    (tag, results)
+  }.foreach { case  (tag, results) =>
     println()
     println(s"Printing tag $tag")
     println()
-    for ((terms, docs) <- topConceptTerms.zip(topConceptDocs)) {
-      println("Concept terms: " + terms.map(_._1).mkString(", "))
-      println("Concept docs: " + docs.map(_._1).mkString(", "))
+    for ((terms, docs) <- results) {
+      println("Concept terms: " + terms.map {
+        case (term, score, _) => s"$term ($score)"
+      }.mkString(", "))
+      println("Concept docs: " + docs.map {
+        case (doc, score, _) => s"$doc ($score)"
+      }.mkString(", "))
       println()
     }
   }
