@@ -140,7 +140,7 @@ object LSA extends MongoNewsProvider with App {
       val v = svd.V
       val topTerms = new ArrayBuffer[Seq[(String, Double, Int)]]()
       val arr = v.toArray
-      for (i <- 0 until numConcepts) {
+      for (i <- 0 until numConcepts.min(v.numRows)) {
         val offs = i * v.numRows
         val termWeights = arr.slice(offs, offs + v.numRows).zipWithIndex
         val sorted = termWeights.sortBy(-_._1)
@@ -156,7 +156,7 @@ object LSA extends MongoNewsProvider with App {
     : Seq[Seq[(String, Double, Long)]] = {
       val u = svd.U
       val topDocs = new ArrayBuffer[Seq[(String, Double, Long)]]()
-      for (i <- 0 until numConcepts) {
+      for (i <- 0 until numConcepts.min(u.numRows().toInt)) {
         val docWeights = u.rows.map(_.toArray(i)).zipWithUniqueId
         topDocs += docWeights.top(numDocs).map {
           case (score, id) => (docIds(id), score, id)
@@ -169,18 +169,24 @@ object LSA extends MongoNewsProvider with App {
     val topConceptTerms = topTermsInTopConcepts(svd, topConcepts, topTerms, termIds.map { case (term, index) => (index.toLong, term) })
     val topConceptDocs = topDocsInTopConcepts(svd, topConcepts, topDocuments, docIds)
     val results = docsWhichContainsTerms(topConceptTerms.zip(topConceptDocs), fullDocs)
-    (tag, results)
+
+    val filteredResults = results.filter {
+      case (_, docs) => docs.nonEmpty
+    }.groupBy {
+      case (terms, _) => terms.map(_._3).sorted
+    }.map(_._2.head).toSeq.sortBy {
+      case (_, docs) => -docs.size
+    }
+
+    (tag, filteredResults)
   }.foreach { case  (tag, results) =>
     println()
     println(s"Printing tag $tag")
     println()
     for ((terms, docs) <- results) {
-      println("Concept terms: " + terms.map {
-        case (term, score, _) => s"$term ($score)"
-      }.mkString(", "))
-      println("Concept docs: " + docs.map {
-        case (doc, score, _) => s"$doc ($score)"
-      }.mkString(", "))
+      println("Docs count: " + docs.size)
+      println("Concept terms: " + terms.map(_._1).mkString(" --- "))
+      println("Concept docs: " + docs.map(_._1).mkString(" --- "))
       println()
     }
   }
