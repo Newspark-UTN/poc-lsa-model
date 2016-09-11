@@ -13,9 +13,9 @@ import scala.collection.mutable.ArrayBuffer
 object LSA extends MongoNewsProvider with App {
   // We need the number of concepts to make the SVD, else set it to default.
   val K = if (args.length > 0) args(0).toInt else 100
-  val topConcepts = if (args.length > 1) args(1).toInt else 10
-  val topTerms = if (args.length > 2) args(2).toInt else 5
-  val topDocuments = if (args.length > 3) args(3).toInt else 3
+  val topConcepts = if (args.length > 1) args(1).toInt else 30
+  val topTerms = if (args.length > 2) args(2).toInt else 4
+  val topDocuments = if (args.length > 3) args(3).toInt else 30
 
   val conf = new SparkConf()
     .setMaster("local[4]")
