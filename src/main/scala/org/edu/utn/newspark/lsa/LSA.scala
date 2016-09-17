@@ -16,6 +16,9 @@ object LSA extends MongoNewsProvider with App {
   val topConcepts = if (args.length > 1) args(1).toInt else 30
   val topTerms = if (args.length > 2) args(2).toInt else 4
   val topDocuments = if (args.length > 3) args(3).toInt else 30
+  val minTermMatchPerDocumentPercentage = if (args.length > 4) args(4).toDouble else 1.0
+
+  if (minTermMatchPerDocumentPercentage <= 0 || minTermMatchPerDocumentPercentage > 1) throw new IllegalArgumentException("minTermMatchPerDocumentPercentage must between 0 and 1")
 
   val conf = new SparkConf()
     .setMaster("local[4]")
@@ -92,7 +95,7 @@ object LSA extends MongoNewsProvider with App {
 
       // Generate the inverse document frequencies
       val idfs: mutable.HashMap[Term, IDF] = documentFrequencies map {
-        case (term, docCount) => (term, math.log(numDocs.toDouble / docCount))
+        case (term, docCount) => (term, math.log(numDocs.toDouble / docCount)) docs: Quiénes eran las víctimas del accidente aéreo de
       }
 
       val termIds: Map[Term, Index] = idfs.keys.zipWithIndex.toMap
@@ -130,9 +133,13 @@ object LSA extends MongoNewsProvider with App {
           val filterDocs = docs.filter {
             case (_, _, id) =>
               val frequencies = documents.getOrElse(id, new mutable.HashMap[String, Int]())
-              terms.forall {
+              val termsCountInContent = terms.count {
                 case (term, _, _) => frequencies.contains(term)
               }
+
+              val percentageOfTermsContained = termsCountInContent / topTerms.toDouble
+
+              percentageOfTermsContained >= minTermMatchPerDocumentPercentage
           }
           (terms, filterDocs)
       }
@@ -195,12 +202,14 @@ object LSA extends MongoNewsProvider with App {
     println(s"Printing tag $tag")
     println()
     for ((terms, docs, image) <- results) {
-      println("Docs count: " + docs.size)
-      println("Concept terms: " + terms.map(_._1).mkString(" --- "))
-      println("Concept docs: " + docs.map(_._1.title).mkString(" --- "))
+      if (docs.size > 1) {
+        println("Docs count: " + docs.size)
+        println("Concept terms: " + terms.map(_._1).mkString(" --- "))
+        println("Concept docs: " + docs.map(_._1.title).mkString(" --- "))
+        println()
+      }
 
       //Tiro  mongo el result
-      println("Saving groups to Mongo")
       mongoSaver.save(MongoGroup(
         concepts = terms.map(_._1),
         news = docs.map(_._1.id),
@@ -208,7 +217,6 @@ object LSA extends MongoNewsProvider with App {
         category = tag
       ))
 
-      println()
     }
   }
 }

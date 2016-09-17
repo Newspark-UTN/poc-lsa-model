@@ -35,7 +35,8 @@ package object lsa {
    */
   val lowerAndRootWord = (word: String) => {
     val lowered = word.toLowerCase
-    lowered.endsWith("es").fold(lowered.dropRight(2), lowered)
+    val regexp = "([aeiou])s$".r
+    regexp.findAllIn(lowered).toList.lastOption.fold(lowered)((_) => lowered.dropRight(1))
   }
 
   /**

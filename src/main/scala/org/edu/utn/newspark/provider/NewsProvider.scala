@@ -44,7 +44,8 @@ class MongoGroupSaver extends MongoConfiguration {
       "category" -> group.category,
       "image" -> group.image,
       "articles" -> group.news,
-      "viewsCount" -> 0
+      "viewsCount" -> 0,
+      "articlesCount" -> group.news.size
     )
   }
 
