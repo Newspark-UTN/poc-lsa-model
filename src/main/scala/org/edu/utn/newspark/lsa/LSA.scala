@@ -4,8 +4,8 @@ import org.apache.spark.mllib.linalg.distributed.RowMatrix
 import org.apache.spark.mllib.linalg.{Matrix, SingularValueDecomposition}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
-import org.edu.utn.newspark.lemmatizer.{News, NewsMeta}
-import org.edu.utn.newspark.provider.MongoNewsProvider
+import org.edu.utn.newspark.lemmatizer.{MongoGroup, News, NewsMeta}
+import org.edu.utn.newspark.provider.{MongoGroupSaver, MongoNewsProvider}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -51,7 +51,7 @@ object LSA extends MongoNewsProvider with App {
       // Identify each news meta with an id for later usage
       val docIds: Map[Long, NewsMeta] = docTermFrequencies.map(_._1).zipWithUniqueId().map(_.swap).collectAsMap().toMap
       // Identify also each word count (each document) with an id for later usage on grouping
-      val docCorpus: Map[Long, mutable.HashMap[String, Int]] = docTermFrequencies.map(_._2).zipWithUniqueId().map(_.swap).collectAsMap().toMap
+      val docContent: Map[Long, mutable.HashMap[String, Int]] = docTermFrequencies.map(_._2).zipWithUniqueId().map(_.swap).collectAsMap().toMap
 
       /** CALCULATION OF DOCUMENT FREQUENCIES */
 
@@ -119,7 +119,7 @@ object LSA extends MongoNewsProvider with App {
       val mat = new RowMatrix(termDocMatrix)
       val svd = mat.computeSVD(K, computeU = true)
 
-      (svd, tag, termIds, docIds, docCorpus)
+      (svd, tag, termIds, docIds, docContent)
     }.toSeq
 
     def docsWhichContainsTerms(results: Seq[(Seq[(String, Double, Int)], Seq[(NewsMeta, Double, Long)])],
@@ -169,6 +169,8 @@ object LSA extends MongoNewsProvider with App {
       topDocs
     }
 
+  val mongoSaver = new MongoGroupSaver
+
   LSARuns.map { case (svd, tag, termIds, docIds, fullDocs) =>
     val topConceptTerms = topTermsInTopConcepts(svd, topConcepts, topTerms, termIds.map { case (term, index) => (index.toLong, term) })
     val topConceptDocs = topDocsInTopConcepts(svd, topConcepts, topDocuments, docIds)
@@ -180,6 +182,11 @@ object LSA extends MongoNewsProvider with App {
       case (terms, _) => terms.map(_._3).sorted
     }.map(_._2.head).toSeq.sortBy {
       case (_, docs) => -docs.size
+    }.map {
+      // We will retrieve the
+      case (term, docs) =>
+        val link = docs.find(_._1.imageUrl != "").fold("")(doc => doc._1.imageUrl)
+        (term, docs, link)
     }
 
     (tag, filteredResults)
@@ -187,10 +194,20 @@ object LSA extends MongoNewsProvider with App {
     println()
     println(s"Printing tag $tag")
     println()
-    for ((terms, docs) <- results) {
+    for ((terms, docs, image) <- results) {
       println("Docs count: " + docs.size)
       println("Concept terms: " + terms.map(_._1).mkString(" --- "))
       println("Concept docs: " + docs.map(_._1.title).mkString(" --- "))
+
+      //Tiro  mongo el result
+      println("Saving groups to Mongo")
+      mongoSaver.save(MongoGroup(
+        concepts = terms.map(_._1),
+        news = docs.map(_._1.id),
+        image = image,
+        category = tag
+      ))
+
       println()
     }
   }
