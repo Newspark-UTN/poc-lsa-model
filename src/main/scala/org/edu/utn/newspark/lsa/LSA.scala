@@ -4,8 +4,8 @@ import org.apache.spark.mllib.linalg.distributed.RowMatrix
 import org.apache.spark.mllib.linalg.{Matrix, SingularValueDecomposition}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
-import org.edu.utn.newspark.lemmatizer.{MongoGroup, News, NewsMeta}
-import org.edu.utn.newspark.provider.{MongoGroupSaver, MongoNewsProvider}
+import org.edu.utn.newspark.lemmatizer._
+import org.edu.utn.newspark.provider.{MongoGroupConnector, MongoNewsProvider}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -95,7 +95,7 @@ object LSA extends MongoNewsProvider with App {
 
       // Generate the inverse document frequencies
       val idfs: mutable.HashMap[Term, IDF] = documentFrequencies map {
-        case (term, docCount) => (term, math.log(numDocs.toDouble / docCount)) docs: Quiénes eran las víctimas del accidente aéreo de
+        case (term, docCount) => (term, math.log(numDocs.toDouble / docCount))
       }
 
       val termIds: Map[Term, Index] = idfs.keys.zipWithIndex.toMap
@@ -176,7 +176,8 @@ object LSA extends MongoNewsProvider with App {
       topDocs
     }
 
-  val mongoSaver = new MongoGroupSaver
+  val mongoSaver = new MongoGroupConnector
+  val persistedGroups = mongoSaver.retrieveGroups
 
   LSARuns.map { case (svd, tag, termIds, docIds, fullDocs) =>
     val topConceptTerms = topTermsInTopConcepts(svd, topConcepts, topTerms, termIds.map { case (term, index) => (index.toLong, term) })
@@ -184,39 +185,50 @@ object LSA extends MongoNewsProvider with App {
     val results = docsWhichContainsTerms(topConceptTerms.zip(topConceptDocs), fullDocs)
 
     val filteredResults = results.filter {
-      case (_, docs) => docs.nonEmpty
-    }.groupBy {
-      case (terms, _) => terms.map(_._3).sorted
-    }.map(_._2.head).toSeq.sortBy {
-      case (_, docs) => -docs.size
-    }.map {
-      // We will retrieve the
-      case (term, docs) =>
-        val link = docs.find(_._1.imageUrl != "").fold("")(doc => doc._1.imageUrl)
-        (term, docs, link)
-    }
-
-    (tag, filteredResults)
-  }.foreach { case  (tag, results) =>
-    println()
-    println(s"Printing tag $tag")
-    println()
-    for ((terms, docs, image) <- results) {
-      if (docs.size > 1) {
-        println("Docs count: " + docs.size)
-        println("Concept terms: " + terms.map(_._1).mkString(" --- "))
-        println("Concept docs: " + docs.map(_._1.title).mkString(" --- "))
-        println()
+        case (_, docs) => docs.nonEmpty
+      }
+      // Order news by doc count
+      .sortBy {
+        case (_, docs) => -docs.size
+      }
+      // We will retrieve an image from the docs
+      .map {
+        case (term, docs) =>
+          val link = docs.find(_._1.imageUrl != "").fold("")(doc => doc._1.imageUrl)
+          (term, docs, link)
       }
 
-      //Tiro  mongo el result
-      mongoSaver.save(MongoGroup(
-        concepts = terms.map(_._1),
-        news = docs.map(_._1.id),
-        image = image,
-        category = tag
-      ))
+    (tag, filteredResults)
+  }.map {
+    case (tag, results) =>
+      println()
+      println(s"Printing tag $tag")
+      println()
+      for ((terms, docs, image) <- results) yield {
+        if (docs.size > 1) {
+          println("Docs count: " + docs.size)
+          println("Concept terms: " + terms.map(_._1).mkString(" --- "))
+          println("Concept docs: " + docs.map(_._1.title).mkString(" --- "))
+          println()
+        }
 
+        NonPersistedMongoGroup(
+          concepts = terms.map(_._1),
+          news = docs.map(_._1.id),
+          image = image,
+          category = tag
+        )
+      }
+  }.foreach { case newGroups: List[NonPersistedMongoGroup] =>
+      val active = (group: Group) => true
+      val groups: List[Group] = (persistedGroups ++ newGroups)
+        // Remove duplicate groups that contains the same term list
+      val activeGroups = groups.groupBy(_.concepts.sorted).map(_._2.head).toSeq
+          // Remove duplicate groups that contains the same docs list
+          .groupBy(_.news.sorted).map(_._2.head).toSeq
+
+
+      persistableGroups.collect{ case group: NonPersistedMongoGroup if group.active => mongoSaver.save(group)}
+      persistableGroups.collect{ case group: PersistedMongoGroup if !group.active => mongoSaver.update(group)}
     }
-  }
 }

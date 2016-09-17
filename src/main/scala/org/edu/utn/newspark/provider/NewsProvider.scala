@@ -1,8 +1,7 @@
 package org.edu.utn.newspark.provider
 
 import com.mongodb.casbah.Imports._
-import org.bson.types.ObjectId
-import org.edu.utn.newspark.lemmatizer.{MongoContent, MongoGroup, News}
+import org.edu.utn.newspark.lemmatizer._
 
 import scala.io.Source
 
@@ -20,14 +19,17 @@ sealed trait MongoConfiguration {
   def collection: MongoCollection
 }
 
-sealed trait NewsProvider extends Stopwords {
+sealed trait NewsProvider extends Stopwords with MongoConfiguration {
   def retrieveNews: List[News]
 }
 
-class MongoNewsProvider extends NewsProvider with MongoConfiguration {
+sealed trait GroupsProvider extends MongoConfiguration {
+  def retrieveGroups: List[PersistedMongoGroup]
+}
+
+class MongoNewsProvider extends NewsProvider {
   import com.mongodb.casbah.Imports._
   import com.novus.salat._
-  import com.novus.salat.annotations._
   import com.novus.salat.global._
   def collection = db("news")
 
@@ -35,10 +37,13 @@ class MongoNewsProvider extends NewsProvider with MongoConfiguration {
   override def retrieveNews: List[News] = allDocs.map(obj => grater[MongoContent].asObject(obj).toNews).toList
 }
 
-class MongoGroupSaver extends MongoConfiguration {
+class MongoGroupConnector extends GroupsProvider {
+  import com.mongodb.casbah.Imports._
+  import com.novus.salat._
+  import com.novus.salat.global._
   def collection = db("groups")
 
-  implicit val mongoGroupMapper : MongoGroup => DBObject = (group) => {
+  implicit val mongoGroupMapper : Group => DBObject = (group) => {
     MongoDBObject(
       "concepts" -> group.concepts,
       "category" -> group.category,
@@ -49,7 +54,18 @@ class MongoGroupSaver extends MongoConfiguration {
     )
   }
 
-  def save(group: MongoGroup) = {
-    collection.save[MongoGroup](group)
+  def save(group: Group) = {
+    collection.save[Group](group)
+  }
+
+  def update(group: PersistedMongoGroup) = {
+    val q = MongoDBObject("_id" -> s"ObjectId(${group.id})")
+    collection.findAndModify(q, grater[PersistedMongoGroup].asDBObject(group))
+  }
+
+  // Retrieve only the ones which are active
+  def retrieveGroups: List[PersistedMongoGroup] = {
+    val q = MongoDBObject("active" -> "true")
+    collection.find(q).map(obj => grater[PersistedMongoGroup].asObject(obj)).toList
   }
 }
