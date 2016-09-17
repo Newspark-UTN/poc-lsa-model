@@ -1,6 +1,7 @@
 package org.edu.utn.newspark.provider
 
-import org.edu.utn.newspark.lemmatizer.{MongoContent, News}
+import org.bson.types.ObjectId
+import org.edu.utn.newspark.lemmatizer.{MongoContent, News, NewsMeta}
 
 import scala.io.Source
 
@@ -23,7 +24,7 @@ class FileNewsProvider extends NewsProvider {
   def retrieveNews =
     newsFromFile
       .grouped(2)
-      .map{ case title :: tag :: content :: Nil => News(title, tag, content) }
+      .map{ case title :: tag :: content :: Nil => News(NewsMeta(new ObjectId(),title,tag, ""), content) }
       .toList
 }
 

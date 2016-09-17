@@ -4,7 +4,7 @@ import org.apache.spark.mllib.linalg.distributed.RowMatrix
 import org.apache.spark.mllib.linalg.{Matrix, SingularValueDecomposition}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
-import org.edu.utn.newspark.lemmatizer.News
+import org.edu.utn.newspark.lemmatizer.{News, NewsMeta}
 import org.edu.utn.newspark.provider.MongoNewsProvider
 
 import scala.collection.mutable
@@ -25,9 +25,9 @@ object LSA extends MongoNewsProvider with App {
   val allNews: List[News] = retrieveNews
 
   // For each tag, calculate svd, termIds, and docIds
-  val LSARuns: Seq[(SVD, Tag, Map[Term, Index], Map[Long, String], Map[Long, mutable.HashMap[String, Int]])] =
+  val LSARuns: Seq[(SVD, Tag, Map[Term, Index], Map[Long, NewsMeta], Map[Long, mutable.HashMap[String, Int]])] =
 
-    allNews.groupBy(_.tag).map { case (tag, newsPerTag) =>
+    allNews.groupBy(_.meta.tag).map { case (tag, newsPerTag) =>
 
       val numDocs = newsPerTag.length
 
@@ -35,9 +35,9 @@ object LSA extends MongoNewsProvider with App {
       val withoutLemmaRDD: RDD[News] = sc.parallelize(newsPerTag)
 
       // Clean all the documents
-      val lemmatizedRDD: RDD[(Title, Seq[String])] = withoutLemmaRDD collect { case News(title, _, content) => (title, plainTextToLemmas(content, stopwords)) }
+      val lemmatizedRDD: RDD[(NewsMeta, Seq[String])] = withoutLemmaRDD collect { case News(meta, content) => (meta, plainTextToLemmas(content, stopwords)) }
 
-      val docTermFrequencies: RDD[(Title, mutable.HashMap[String, Int])] = lemmatizedRDD.mapValues(terms => {
+      val docTermFrequencies: RDD[(NewsMeta, mutable.HashMap[String, Int])] = lemmatizedRDD.mapValues(terms => {
         val termFreqsInDoc = terms.foldLeft(new mutable.HashMap[String, Int]()) {
           (map, term) => map += term -> (map.getOrElse(term, 0) + 1)
         }
@@ -48,8 +48,8 @@ object LSA extends MongoNewsProvider with App {
       // to calculate idfs and term document matrix
       docTermFrequencies.cache()
 
-      // Identify each title with an id for later usage
-      val docIds: Map[Long, Title] = docTermFrequencies.map(_._1).zipWithUniqueId().map(_.swap).collectAsMap().toMap
+      // Identify each news meta with an id for later usage
+      val docIds: Map[Long, NewsMeta] = docTermFrequencies.map(_._1).zipWithUniqueId().map(_.swap).collectAsMap().toMap
       // Identify also each word count (each document) with an id for later usage on grouping
       val docCorpus: Map[Long, mutable.HashMap[String, Int]] = docTermFrequencies.map(_._2).zipWithUniqueId().map(_.swap).collectAsMap().toMap
 
@@ -66,7 +66,7 @@ object LSA extends MongoNewsProvider with App {
         * @param tfs the termFrequencies of a single document of the rdd we cached before.
         * @return the partial dfs result in the mapper executing the merge.
         */
-      def mergeDocumentFrequencies(dfs: mutable.HashMap[Term, Int], tfs: (Title, mutable.HashMap[String, Int])): mutable.HashMap[String, Int] = {
+      def mergeDocumentFrequencies(dfs: mutable.HashMap[Term, Int], tfs: (NewsMeta, mutable.HashMap[String, Int])): mutable.HashMap[String, Int] = {
         tfs._2.keySet.foreach { term =>
           dfs += term -> (dfs.getOrElse(term, 0) + 1)
         }
@@ -122,9 +122,9 @@ object LSA extends MongoNewsProvider with App {
       (svd, tag, termIds, docIds, docCorpus)
     }.toSeq
 
-    def docsWhichContainsTerms(results: Seq[(Seq[(String, Double, Int)], Seq[(String, Double, Long)])],
+    def docsWhichContainsTerms(results: Seq[(Seq[(String, Double, Int)], Seq[(NewsMeta, Double, Long)])],
                                documents:  Map[Long, mutable.HashMap[String, Int]])
-    : Seq[(Seq[(String, Double, Int)], Seq[(String, Double, Long)])] = {
+    : Seq[(Seq[(String, Double, Int)], Seq[(NewsMeta, Double, Long)])] = {
       results.map {
         case (terms, docs) =>
           val filterDocs = docs.filter {
@@ -156,10 +156,10 @@ object LSA extends MongoNewsProvider with App {
     }
 
     def topDocsInTopConcepts(svd: SingularValueDecomposition[RowMatrix, Matrix],
-                             numConcepts: Int, numDocs: Int, docIds: scala.collection.Map[Long, String])
-    : Seq[Seq[(String, Double, Long)]] = {
+                             numConcepts: Int, numDocs: Int, docIds: scala.collection.Map[Long, NewsMeta])
+    : Seq[Seq[(NewsMeta, Double, Long)]] = {
       val u = svd.U
-      val topDocs = new ArrayBuffer[Seq[(String, Double, Long)]]()
+      val topDocs = new ArrayBuffer[Seq[(NewsMeta, Double, Long)]]()
       for (i <- 0 until numConcepts.min(u.numRows().toInt)) {
         val docWeights = u.rows.map(_.toArray(i)).zipWithUniqueId
         topDocs += docWeights.top(numDocs).map {
@@ -190,7 +190,7 @@ object LSA extends MongoNewsProvider with App {
     for ((terms, docs) <- results) {
       println("Docs count: " + docs.size)
       println("Concept terms: " + terms.map(_._1).mkString(" --- "))
-      println("Concept docs: " + docs.map(_._1).mkString(" --- "))
+      println("Concept docs: " + docs.map(_._1.title).mkString(" --- "))
       println()
     }
   }

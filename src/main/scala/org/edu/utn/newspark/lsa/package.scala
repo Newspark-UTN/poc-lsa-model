@@ -20,6 +20,8 @@ package object lsa {
   type Term = String
   type Tag = String
   type Title = String
+  type Id = String
+  type ImageUrl = String
   type Index = Int
   type IDF = Double
   type TF_IDF = Double
