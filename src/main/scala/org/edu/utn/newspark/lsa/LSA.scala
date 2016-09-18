@@ -95,7 +95,7 @@ object LSA extends MongoNewsProvider with App {
 
       // Generate the inverse document frequencies
       val idfs: mutable.HashMap[Term, IDF] = documentFrequencies map {
-        case (term, docCount) => (term, math.log(numDocs.toDouble / docCount)) docs: Quiénes eran las víctimas del accidente aéreo de
+        case (term, docCount) => (term, math.log(numDocs.toDouble / docCount))
       }
 
       val termIds: Map[Term, Index] = idfs.keys.zipWithIndex.toMap

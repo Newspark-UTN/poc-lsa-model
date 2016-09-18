@@ -15,7 +15,8 @@ trait Stopwords {
 }
 
 sealed trait MongoConfiguration {
-  val mongoClient =  MongoClient("mongo.newspark.local", 27017)
+  val uri = MongoClientURI("mongodb://admin:newspark@ds033036.mlab.com:33036/newspark")
+  val mongoClient =  MongoClient(uri)
   val db = mongoClient("newspark")
   def collection: MongoCollection
 }
