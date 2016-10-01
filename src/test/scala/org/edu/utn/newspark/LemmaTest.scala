@@ -10,9 +10,6 @@ class LemmaTest extends Specification with Stopwords {
     "extract accents correctly" in {
       extractAccents("ñoquí") ==== "noqui"
     }
-    "lower and root words correctly" in {
-      lowerAndRootWord("MARCadores") ==== ("marcadore")
-    }
     "detect that a word is fully composed of letters" in {
       val word = "Holaqhace"
       isOnlyLetters(word) should beTrue

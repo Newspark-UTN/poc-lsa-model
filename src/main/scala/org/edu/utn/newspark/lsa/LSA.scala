@@ -145,11 +145,22 @@ object LSA extends MongoNewsProvider with App {
       }
     }
 
+  /**
+   * Gets hold of V (m, k) matrix, m being the number of terms of the tag corpus and k the number of concepts considered,
+   * and ranks the top `numTerms` in top `numConcepts`, returning their value, score for those concepts and id inside a
+   * term map to be accessed later.
+   *
+   * @param svd the singular value decomposition matrices for the tag
+   * @param numConcepts the number of concepts to take into account when ranking
+   * @param numTerms the number of terms to rank
+   * @param termIds the map of ids against terms
+   * @return and array of arrays with the term scores ranked
+   */
     def topTermsInTopConcepts(svd: SingularValueDecomposition[RowMatrix, Matrix],
                               numConcepts: Int, numTerms: Int, termIds: Map[Long, String])
-    : Seq[Seq[(String, Double, Int)]] = {
+    : Seq[Seq[TermScore]] = {
       val v = svd.V
-      val topTerms = new ArrayBuffer[Seq[(String, Double, Int)]]()
+      val topTerms = new ArrayBuffer[Seq[TermScore]]()
       val arr = v.toArray
       for (i <- 0 until numConcepts.min(v.numRows)) {
         val offs = i * v.numRows
@@ -162,11 +173,22 @@ object LSA extends MongoNewsProvider with App {
       topTerms
     }
 
+  /**
+   * Gets hold of U (k, n) matrix, k being the number of concepts and n the number of documents for the current tag,
+   * creating an array of arrays with the meta data of the news, its score against those top `numConcepts` and id
+   * inside a map of documents for later usage
+   *
+   * @param svd the singular value decomposition matrices for the tag
+   * @param numConcepts the number of concepts to consider when ranking
+   * @param numDocs the number of documents to rank
+   * @param docIds the map to access when going over the U matrix, to get the meta data of the news
+   * @return an array of arrays with the top docs
+   */
     def topDocsInTopConcepts(svd: SingularValueDecomposition[RowMatrix, Matrix],
                              numConcepts: Int, numDocs: Int, docIds: scala.collection.Map[Long, NewsMeta])
-    : Seq[Seq[(NewsMeta, Double, Long)]] = {
+    : Seq[Seq[DocScore]] = {
       val u = svd.U
-      val topDocs = new ArrayBuffer[Seq[(NewsMeta, Double, Long)]]()
+      val topDocs = new ArrayBuffer[Seq[DocScore]]()
       for (i <- 0 until numConcepts.min(u.numRows().toInt)) {
         val docWeights = u.rows.map(_.toArray(i)).zipWithUniqueId
         topDocs += docWeights.top(numDocs).map {
@@ -190,10 +212,10 @@ object LSA extends MongoNewsProvider with App {
     }.map(_._2.head).toSeq.sortBy {
       case (_, docs) => -docs.size
     }.map {
-      // We will retrieve the
+      // Retrieve image url, if available
       case (term, docs) =>
-        val link = docs.find(_._1.imageUrl != "").fold("")(doc => doc._1.imageUrl)
-        (term, docs, link)
+        val imageLink = docs.find(_._1.imageUrl != "").fold("")(doc => doc._1.imageUrl)
+        (term, docs, imageLink)
     }
 
     (tag, filteredResults)
@@ -201,7 +223,9 @@ object LSA extends MongoNewsProvider with App {
     println()
     println(s"Printing tag $tag")
     println()
-    for ((terms, docs, image) <- results) {
+    val withoutDuplicates: Seq[Group] = DuplicateAnalyzer.removeDuplicates(results)
+    // Results coming as (concepts, docs in group, image)
+    for ((terms, docs, image) <- withoutDuplicates) {
       if (docs.size > 1) {
         println("Docs count: " + docs.size)
         println("Concept terms: " + terms.map(_._1).mkString(" --- "))
@@ -209,7 +233,6 @@ object LSA extends MongoNewsProvider with App {
         println()
       }
 
-      //Tiro  mongo el result
       mongoSaver.save(MongoGroup(
         concepts = terms.map(_._1),
         news = docs.map(_._1.id),

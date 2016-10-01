@@ -8,6 +8,7 @@ import edu.stanford.nlp.ling.CoreAnnotations.{LemmaAnnotation, SentencesAnnotati
 import edu.stanford.nlp.pipeline.{Annotation, StanfordCoreNLP}
 import org.apache.spark.mllib.linalg.{Matrix, SingularValueDecomposition}
 import org.apache.spark.mllib.linalg.distributed.RowMatrix
+import org.edu.utn.newspark.lemmatizer.NewsMeta
 
 import scala.collection.JavaConverters._
 import scalaz.syntax.std.boolean._
@@ -26,25 +27,16 @@ package object lsa {
   type IDF = Double
   type TF_IDF = Double
   type SVD = SingularValueDecomposition[RowMatrix, Matrix]
-
-  /**
-   * Function that takes a word and removes the "es" for the moment
-   * naively to conform a rooting technique
-   *
-   * Example: "Marcadores" will be rooted to "marcador"
-   */
-  val lowerAndRootWord = (word: String) => {
-    val lowered = word.toLowerCase
-    val regexp = "([aeiou])s$".r
-    regexp.findAllIn(lowered).toList.lastOption.fold(lowered)((_) => lowered.dropRight(1))
-  }
+  type TermScore = (String, Double, Int)
+  type DocScore = (NewsMeta, Double, Long)
+  type Group = (Seq[TermScore], Seq[DocScore], ImageUrl)
 
   /**
    * Removes accents from words, which are really common in Spanish.
    *
    * Examples: "ñoqui" will be "noqui", "tirabuzón" will be "tirabuzon"
    */
-  val extractAccents = (word: String) => Normalizer.normalize(word, Normalizer.Form.NFD).replaceAll("\\p{M}", "")
+  val extractAccents = (word: String) => Normalizer.normalize(word, Normalizer.Form.NFD).replaceAll("\\p{M}", "").toLowerCase
 
   /**
    * Checks if a string is conformed fully of letters.
@@ -83,7 +75,7 @@ package object lsa {
     for {
       sentence <- sentences.asScala
       token <- sentence.get(classOf[TokensAnnotation]).asScala
-      lemma = (lowerAndRootWord andThen extractAccents).apply(token.get(classOf[LemmaAnnotation]))
+      lemma = extractAccents.apply(token.get(classOf[LemmaAnnotation]))
       if lemma.length > 2 && !stopwords.contains(lemma) && isOnlyLetters(lemma)
     } yield lemma
   }
