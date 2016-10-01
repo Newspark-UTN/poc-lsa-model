@@ -21,16 +21,12 @@ object DuplicateAnalyzer {
   def removeDuplicates(groups: Seq[Group]): Seq[Group] = {
     val documentInvertedIndex: mutable.HashMap[NewsMeta, List[(Seq[Term], Double)]] = invertedMetaConceptScoreIndex(groups)
     val maxScoreTermsForNews: mutable.HashMap[NewsMeta, Seq[Term]] = invertedToMaxTermScores(documentInvertedIndex)
-    val newsToKeep = maxScoreTermsForNews.keySet
 
-    val (groupsToSelectMaxScore, groupsToKeepIntact) = groups.partition{ case (_, docs, _) => docs.map(_._1).exists(newsToKeep.contains)}
-
-    val withoutDuplicates: Seq[Group] = groupsToSelectMaxScore.filter { case (terms, docs, _) =>
-      docs
-        .find{ case (meta, _, _) => newsToKeep.contains(meta)}
-        .flatMap{ case (meta, _, _) => maxScoreTermsForNews.get(meta)}
-        .contains(terms.map(_._1))
+    val (groupsToSelectMaxScore, groupsToKeepIntact) = groups.partition{ case (_, docs, _) =>
+      docs.map(_._1).exists(maxScoreTermsForNews.keySet.contains)
     }
+
+    val withoutDuplicates: Seq[Group] = keepOnlyWithMaxScore(groupsToSelectMaxScore, maxScoreTermsForNews)
 
     withoutDuplicates ++ groupsToKeepIntact
   }
