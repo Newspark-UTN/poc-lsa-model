@@ -40,7 +40,7 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
     scrapeDate = now
   )
 
-  val mongoContentTwoDaysAgo = mongoContent.copy(_id = generateObjId, scrapeDate = twoDaysBeforeNow)
+  val mongoContentTwoDaysAgo = mongoContent.copy(_id = generateObjId, scrapeDate = twoDaysBeforeNow, link = "another link")
 
   val newsDAO = new MongoNewsDAO
 
@@ -48,6 +48,9 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
     val insert = newsDAO.collection.insert(mongoContent)
     insert.wasAcknowledged() must beTrue
   }
+
+  newsDAO.collection.remove(mongoContent)
+  newsDAO.collection.remove(mongoContentTwoDaysAgo)
 
   "A request to get news" should {
     "return the inserted news" in {
@@ -57,6 +60,7 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
         news.map(_.content).getOrElse("") ==== mongoContent.content
       }
     "return correctly if we query by date" in {
+      saveMongoContent(mongoContent)
       saveMongoContent(mongoContentTwoDaysAgo)
       newsDAO.retrieveNews.filter(_.content == mongoContent.content) must haveSize(1)
     }
