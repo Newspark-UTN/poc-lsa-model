@@ -17,9 +17,9 @@ trait Stopwords {
 }
 
 trait MongoConfiguration {
-  val uri = MongoClientURI("mongodb://admin:newspark@ds033036.mlab.com:33036/newspark")
-  val mongoClient =  MongoClient(uri)
-//val mongoClient = MongoClient("localhost", 27017)
+//  val uri = MongoClientURI("mongodb://admin:newspark@ds033036.mlab.com:33036/newspark")
+//  val mongoClient =  MongoClient(uri)
+val mongoClient = MongoClient("localhost", 27017)
   val db = mongoClient("newspark")
   def collection: MongoCollection
 }
@@ -36,7 +36,7 @@ class MongoNewsDAO extends NewsProvider with MongoConfiguration {
   def collection = db("news")
 
   // Query news that are > 1 day before today
-  val oneDayBeforeTodayQuery = "scrapeDate" $gt new Date().addDays(-1)
+  val oneDayBeforeTodayQuery = "scrapeDate" $gte new Date().addDays(-1)
   val allDocs = collection.find(oneDayBeforeTodayQuery)
   override def retrieveNews: List[News] = allDocs.map(obj => grater[MongoContent].asObject(obj).toNews).toList
 }

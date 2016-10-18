@@ -52,13 +52,13 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
   "A request to get news" should {
     "return the inserted news" in {
         saveMongoContent(mongoContent)
-        val find = newsDAO.collection.find().limit(1).map(obj => grater[MongoContent].asObject(obj)).toList
-        val news = find.head
-        news.content ==== mongoContent.content
+        val find = newsDAO.collection.find(MongoDBObject("content" -> mongoContent.content)).map(obj => grater[MongoContent].asObject(obj).toNews).toList
+        val news = find.headOption
+        news.map(_.content).getOrElse("") ==== mongoContent.content
       }
     "return correctly if we query by date" in {
       saveMongoContent(mongoContentTwoDaysAgo)
-      newsDAO.retrieveNews must haveSize(1)
+      newsDAO.retrieveNews.filter(_.content == mongoContent.content) must haveSize(1)
     }
   }
 

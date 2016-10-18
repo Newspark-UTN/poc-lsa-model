@@ -10,7 +10,10 @@ import org.edu.utn.newspark.lemmatizer.NewsMeta
  */
 trait NewsFixture {
 
-  def generateObjId = new ObjectId(new Date)
+  def generateObjId = {
+    Thread.sleep(20)
+    new ObjectId(new Date)
+  }
   def generateNewsMeta(title: String) = NewsMeta(generateObjId, title, "Deportes", "the image url")
 
   // Fixture
