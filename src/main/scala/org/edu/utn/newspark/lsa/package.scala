@@ -2,16 +2,15 @@ package org.edu.utn.newspark
 
 import java.lang.Character.isLetter
 import java.text.Normalizer
-import java.util.Properties
+import java.util.{Calendar, Date, Properties}
 
 import edu.stanford.nlp.ling.CoreAnnotations.{LemmaAnnotation, SentencesAnnotation, TokensAnnotation}
 import edu.stanford.nlp.pipeline.{Annotation, StanfordCoreNLP}
-import org.apache.spark.mllib.linalg.{Matrix, SingularValueDecomposition}
 import org.apache.spark.mllib.linalg.distributed.RowMatrix
+import org.apache.spark.mllib.linalg.{Matrix, SingularValueDecomposition}
 import org.edu.utn.newspark.lemmatizer.NewsMeta
 
 import scala.collection.JavaConverters._
-import scalaz.syntax.std.boolean._
 
 /**
  * We should place functions that will likely be used across the project.
@@ -78,5 +77,14 @@ package object lsa {
       lemma = extractAccents.apply(token.get(classOf[LemmaAnnotation]))
       if lemma.length > 2 && !stopwords.contains(lemma) && isOnlyLetters(lemma)
     } yield lemma
+  }
+
+  implicit class PimpedDate(val date: Date) {
+    def addDays(n: Int): Date = {
+      val c = Calendar.getInstance()
+      c.setTime(date)
+      c.add(Calendar.DATE, n)
+      c.getTime
+    }
   }
 }

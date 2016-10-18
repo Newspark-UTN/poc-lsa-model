@@ -5,12 +5,12 @@ import org.apache.spark.mllib.linalg.{Matrix, SingularValueDecomposition}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 import org.edu.utn.newspark.lemmatizer.{MongoGroup, News, NewsMeta}
-import org.edu.utn.newspark.provider.{MongoGroupSaver, MongoNewsProvider}
+import org.edu.utn.newspark.provider.{MongoGroupDAO, MongoNewsDAO}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-object LSA extends MongoNewsProvider with App {
+object LSA extends MongoNewsDAO with App {
   // We need the number of concepts to make the SVD, else set it to default.
   val K = if (args.length > 0) args(0).toInt else 100
   val topConcepts = if (args.length > 1) args(1).toInt else 30
@@ -198,7 +198,7 @@ object LSA extends MongoNewsProvider with App {
       topDocs
     }
 
-  val mongoSaver = new MongoGroupSaver
+  val mongoDAO = new MongoGroupDAO
 
   LSARuns.map { case (svd, tag, termIds, docIds, fullDocs) =>
     val topConceptTerms = topTermsInTopConcepts(svd, topConcepts, topTerms, termIds.map { case (term, index) => (index.toLong, term) })
@@ -225,7 +225,7 @@ object LSA extends MongoNewsProvider with App {
     println()
     val withoutDuplicates: Seq[Group] = DuplicateAnalyzer.removeDuplicates(results)
     // Results coming as (concepts, docs in group, image)
-    for ((terms, docs, image) <- withoutDuplicates) {
+    for (group @ (terms, docs, image) <- withoutDuplicates) {
       if (docs.size > 1) {
         println("Docs count: " + docs.size)
         println("Concept terms: " + terms.map(_._1).mkString(" --- "))
@@ -233,13 +233,24 @@ object LSA extends MongoNewsProvider with App {
         println()
       }
 
-      mongoSaver.save(MongoGroup(
-        concepts = terms.map(_._1),
-        news = docs.map(_._1.id),
-        image = image,
-        category = tag
-      ))
-
+      mongoDAO.save(lsaGroupToMongoGroup(group, tag))
     }
+  }
+
+  /**
+   * Group adapter to MongoGroup
+   *
+   * @param group the group to adapt
+   * @param tag the tag of the group
+   * @return the corresponding MongoGroup
+   */
+  def lsaGroupToMongoGroup(group: Group, tag: String): MongoGroup = {
+    val (terms, docs, image) = group
+    MongoGroup(
+      concepts = terms.map(_._1),
+      news = docs.map(_._1.id),
+      image = image,
+      category = tag
+    )
   }
 }

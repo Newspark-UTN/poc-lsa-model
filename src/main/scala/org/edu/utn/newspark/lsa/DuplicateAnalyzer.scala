@@ -67,7 +67,7 @@ object DuplicateAnalyzer {
   }
 
   /**
-   * Checks if the document inside the group are the same as the terms (which were the ones with max value)
+   * Checks if the documents inside the groups are the same as the terms (which were the ones with max value)
    * and filters them out, keeping only the one that matches the value of the given news.
    *
    * @param potentialGroups groups to be filtered
