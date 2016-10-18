@@ -50,8 +50,7 @@ object MongoGroupDAO {
       "image" -> group.image,
       "articles" -> group.news,
       "viewsCount" -> 0,
-      "articlesCount" -> group.news.size,
-      "lsaGroup" -> group
+      "articlesCount" -> group.news.size
     )
 }
 
