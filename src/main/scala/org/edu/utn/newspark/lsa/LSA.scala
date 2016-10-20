@@ -258,7 +258,8 @@ object LSA extends MongoNewsDAO with App {
       category = tag,
       minDate = newsDates.min,
       maxDate = newsDates.max,
-      groupedDate = new Date
+      groupedDate = new Date,
+      group = group
     )
   }
 }

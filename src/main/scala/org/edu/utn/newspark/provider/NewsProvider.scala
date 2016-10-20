@@ -3,7 +3,8 @@ package org.edu.utn.newspark.provider
 import java.util.Date
 
 import com.mongodb.casbah.Imports._
-import org.edu.utn.newspark.lemmatizer.{MongoContent, MongoGroup, News}
+import com.novus.salat.dao.SalatDAO
+import org.edu.utn.newspark.lemmatizer._
 import org.edu.utn.newspark.lsa._
 
 import scala.io.Source
@@ -17,9 +18,9 @@ trait Stopwords {
 }
 
 trait MongoConfiguration {
-  val uri = MongoClientURI("mongodb://admin:newspark@ds033036.mlab.com:33036/newspark")
-  val mongoClient =  MongoClient(uri)
-//val mongoClient = MongoClient("localhost", 27017)
+//  val uri = MongoClientURI("mongodb://admin:newspark@ds033036.mlab.com:33036/newspark")
+//  val mongoClient =  MongoClient(uri)
+val mongoClient = MongoClient("localhost", 27017)
   val db = mongoClient("newspark")
   def collection: MongoCollection
 }
@@ -33,34 +34,40 @@ class MongoNewsDAO extends NewsProvider with MongoConfiguration {
   import com.novus.salat._
   import com.novus.salat.global._
 
-  def collection = db("news")
+  override val collection = db("news")
 
-  // Query news that are > 1 day before today
-  val oneDayBeforeTodayQuery = "scrapeDate" $gte new Date().addDays(-1)
+  // Query news that are >= 1 day before today
+  def oneDayBeforeTodayQuery = "scrapeDate" $gte new Date().addDays(-1)
   val allDocs = collection.find(oneDayBeforeTodayQuery)
   override def retrieveNews: List[News] = allDocs.map(obj => grater[MongoContent].asObject(obj).toNews).toList
 }
 
 object MongoGroupDAO {
-
-  implicit val mongoGroupMapper : MongoGroup => DBObject = group =>
+  implicit val mongoGroupMapper : MongoGroup => DBObject = mongoGroup =>
     MongoDBObject(
-      "concepts" -> group.concepts,
-      "category" -> group.category,
-      "image" -> group.image,
-      "articles" -> group.news,
+      "concepts" -> mongoGroup.concepts,
+      "category" -> mongoGroup.category,
+      "image" -> mongoGroup.image,
+      "articles" -> mongoGroup.news,
       "viewsCount" -> 0,
-      "articlesCount" -> group.news.size,
-      "minDate" -> group.minDate,
-      "maxDate" -> group.maxDate,
-      "groupedDate" -> group.groupedDate
+      "articlesCount" -> mongoGroup.news.size,
+      "minDate" -> mongoGroup.minDate,
+      "maxDate" -> mongoGroup.maxDate,
+      "groupedDate" -> mongoGroup.groupedDate,
+      "conceptScores" -> ConceptScore.fromGroup(mongoGroup.group),
+      "docScores" -> DocScore.fromGroup(mongoGroup.group)
     )
 }
 
 class MongoGroupDAO extends MongoConfiguration {
   import MongoGroupDAO._
+  import com.mongodb.casbah.Imports._
+  import com.novus.salat._
+  import com.novus.salat.global._
 
-  def collection = db("groups")
+  override val collection = db("groups")
+
+  def retrieve = collection.find().map(obj => grater[MongoGroupContent].asObject(obj).toGroup).toList
 
   def save(group: MongoGroup) = {
     collection.save[MongoGroup](group)
