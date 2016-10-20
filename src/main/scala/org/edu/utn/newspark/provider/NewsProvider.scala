@@ -50,7 +50,10 @@ object MongoGroupDAO {
       "image" -> group.image,
       "articles" -> group.news,
       "viewsCount" -> 0,
-      "articlesCount" -> group.news.size
+      "articlesCount" -> group.news.size,
+      "minDate" -> group.minDate,
+      "maxDate" -> group.maxDate,
+      "groupedDate" -> group.groupedDate
     )
 }
 

@@ -5,16 +5,16 @@ import java.util.Date
 import com.mongodb.casbah.Imports._
 import com.novus.salat._
 import com.novus.salat.global._
-import org.edu.utn.newspark.lemmatizer.MongoContent
+import org.edu.utn.newspark.lemmatizer.{MongoContent, MongoGroup, MongoGroupContent}
 import org.edu.utn.newspark.lsa._
-import org.edu.utn.newspark.provider.MongoNewsDAO
+import org.edu.utn.newspark.provider.{MongoGroupDAO, MongoNewsDAO}
 import org.edu.utn.newspark.utils.NewsFixture
 import org.specs2.mutable.Specification
 import org.specs2.specification.{AfterAll, BeforeEach}
+import MongoGroupDAO._
 
 class MongoItSpec extends Specification with NewsFixture with BeforeEach with AfterAll {
 
-  val now = new Date()
   val twoDaysBeforeNow = now.addDays(-2)
 
   implicit val MongoContentSerializer: MongoContent => DBObject = content =>
@@ -29,6 +29,7 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
       "scrapeDate" -> content.scrapeDate
     )
 
+  // News Fixture
   val mongoContent = MongoContent(
     content = "fancy content that should never change",
     link = "the link",
@@ -42,7 +43,37 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
 
   val mongoContentTwoDaysAgo = mongoContent.copy(_id = generateObjId, scrapeDate = twoDaysBeforeNow, link = "another link")
 
+  // Group Fixture
+  val concepts = Seq("messi", "futbol")
+  val newsIds = Seq(generateObjId)
+  val image = "the image url"
+  val category = "deportes"
+
+
+  val mongoGroup = MongoGroup(
+    concepts = concepts,
+    news = newsIds,
+    image = image,
+    category = category,
+    minDate = now,
+    maxDate = now,
+    groupedDate = now
+  )
+
+  val mongoGroupContent = MongoGroupContent(
+    concepts = concepts,
+    category = category,
+    image = image,
+    articles = newsIds,
+    viewsCount = 0,
+    articlesCount = 1,
+    minDate = now,
+    maxDate = now,
+    groupedDate = now
+  )
+
   val newsDAO = new MongoNewsDAO
+  val groupsDAO = new MongoGroupDAO
 
   def saveMongoContent(mongoContent: MongoContent) = {
     val insert = newsDAO.collection.insert(mongoContent)
@@ -51,6 +82,8 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
 
   newsDAO.collection.remove(mongoContent)
   newsDAO.collection.remove(mongoContentTwoDaysAgo)
+
+  groupsDAO.collection.remove(mongoGroup)
 
   "A request to get news" should {
     "return the inserted news" in {
@@ -66,14 +99,23 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
     }
   }
 
+  "A request to save a group" should {
+    "save the group correctly" in {
+      val insert = groupsDAO.collection.insert(mongoGroup)
+      insert.wasAcknowledged() must beTrue
+    }
+  }
+
   // Make sure we don't pollute the true db
   override def afterAll(): Unit = {
     newsDAO.collection.remove(mongoContent)
     newsDAO.collection.remove(mongoContentTwoDaysAgo)
+    groupsDAO.collection.remove(mongoGroup)
   }
 
   override protected def before: Any = {
     newsDAO.collection.remove(mongoContent)
     newsDAO.collection.remove(mongoContentTwoDaysAgo)
+    groupsDAO.collection.remove(mongoGroup)
   }
 }

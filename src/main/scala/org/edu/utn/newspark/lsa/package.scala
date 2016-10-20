@@ -87,4 +87,8 @@ package object lsa {
       c.getTime
     }
   }
+
+  implicit val DateOrdering = new Ordering[Date] {
+    override def compare(x: Date, y: Date): Int = x.getTime.compare(y.getTime)
+  }
 }

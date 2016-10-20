@@ -1,5 +1,7 @@
 package org.edu.utn.newspark.lsa
 
+import java.util.Date
+
 import org.apache.spark.mllib.linalg.distributed.RowMatrix
 import org.apache.spark.mllib.linalg.{Matrix, SingularValueDecomposition}
 import org.apache.spark.rdd.RDD
@@ -246,11 +248,17 @@ object LSA extends MongoNewsDAO with App {
    */
   def lsaGroupToMongoGroup(group: Group, tag: String): MongoGroup = {
     val (terms, docs, image) = group
+    val concepts = terms.map(_._1)
+    val newsObjectIds = docs.map(_._1.id)
+    val newsDates = docs.map(_._1.date)
     MongoGroup(
-      concepts = terms.map(_._1),
-      news = docs.map(_._1.id),
+      concepts = concepts,
+      news = newsObjectIds,
       image = image,
-      category = tag
+      category = tag,
+      minDate = newsDates.min,
+      maxDate = newsDates.max,
+      groupedDate = new Date
     )
   }
 }
