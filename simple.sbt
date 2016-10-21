@@ -51,3 +51,5 @@ assemblyMergeStrategy in assembly := {
 }
 
 test in assembly := {}
+
+scalacOptions ++= Seq("-Xmax-classfile-name","230")
