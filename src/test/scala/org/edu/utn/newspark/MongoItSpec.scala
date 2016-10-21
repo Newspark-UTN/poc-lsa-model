@@ -89,6 +89,7 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
 
   "A request to get news" should {
     "return the inserted news" in {
+        newsDAO.collection.remove(mongoContent)
         saveMongoContent(mongoContent)
         val find = newsDAO.collection.find(MongoDBObject("content" -> mongoContent.content)).map(obj => grater[MongoContent].asObject(obj).toNews).toList
         val news = find.headOption
