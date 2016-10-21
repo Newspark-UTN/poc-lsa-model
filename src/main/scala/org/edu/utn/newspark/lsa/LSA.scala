@@ -6,7 +6,7 @@ import org.apache.spark.mllib.linalg.distributed.RowMatrix
 import org.apache.spark.mllib.linalg.{Matrix, SingularValueDecomposition}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
-import org.edu.utn.newspark.lemmatizer.{MongoGroup, News, NewsMeta}
+import org.edu.utn.newspark.lemmatizer.{MongoGroup, MongoGroupContentToRetrieve, News, NewsMeta}
 import org.edu.utn.newspark.provider.{MongoGroupDAO, MongoNewsDAO}
 
 import scala.collection.mutable
@@ -201,6 +201,7 @@ object LSA extends MongoNewsDAO with App {
     }
 
   val mongoDAO = new MongoGroupDAO
+  val persistedGroups: List[MongoGroupContentToRetrieve] = mongoDAO.retrieve
 
   LSARuns.map { case (svd, tag, termIds, docIds, fullDocs) =>
     val topConceptTerms = topTermsInTopConcepts(svd, topConcepts, topTerms, termIds.map { case (term, index) => (index.toLong, term) })
@@ -217,7 +218,7 @@ object LSA extends MongoNewsDAO with App {
       // Retrieve image url, if available
       case (term, docs) =>
         val imageLink = docs.find(_._1.imageUrl != "").fold("")(doc => doc._1.imageUrl)
-        (term, docs, imageLink)
+        (term, docs, imageLink, false)
     }
 
     (tag, filteredResults)
@@ -225,10 +226,24 @@ object LSA extends MongoNewsDAO with App {
     println()
     println(s"Printing tag $tag")
     println()
-    val withoutDuplicates: Seq[Group] = DuplicateAnalyzer.removeDuplicates(results)
+    val persistedMongoGroupForTag = persistedGroups.filter(group => group.category == tag)
+    val persistedGroupForTag = persistedMongoGroupForTag.map(_.toGroup)
+    val withoutDuplicates: Seq[Group] = DuplicateAnalyzer.removeDuplicates(results ++ persistedGroupForTag)
+
+    val persistedGroupsAfterRemoveDuplicates = withoutDuplicates.filter(_._4)
+    if(persistedGroupsAfterRemoveDuplicates.length != persistedGroupForTag.length) {
+      println(s"******************************************************")
+      println(s"******************************************************")
+      println(s"******************************************************")
+      println(s"${(persistedGroupForTag diff persistedGroupsAfterRemoveDuplicates).map(group => group._3)}")
+      println(s"******************************************************")
+      println(s"******************************************************")
+      println(s"******************************************************")
+    }
+
     // Results coming as (concepts, docs in group, image)
-    for (group @ (terms, docs, image) <- withoutDuplicates) {
-      if (docs.size > 1) {
+    for (group @ (terms, docs, image, persisted) <- withoutDuplicates if !persisted) {
+      if (docs.nonEmpty) {
         println("Docs count: " + docs.size)
         println("Concept terms: " + terms.map(_._1).mkString(" --- "))
         println("Concept docs: " + docs.map(_._1.title).mkString(" --- "))
@@ -247,7 +262,7 @@ object LSA extends MongoNewsDAO with App {
    * @return the corresponding MongoGroup
    */
   def lsaGroupToMongoGroup(group: Group, tag: String): MongoGroup = {
-    val (terms, docs, image) = group
+    val (terms, docs, image, persisted) = group
     val concepts = terms.map(_._1)
     val newsObjectIds = docs.map(_._1.id)
     val newsDates = docs.map(_._1.date)

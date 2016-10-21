@@ -2,9 +2,9 @@ package org.edu.utn.newspark.lemmatizer
 
 import java.util.Date
 
-import com.novus.salat.annotations._
-import org.bson.types.ObjectId
-import org.edu.utn.newspark.lsa.Group
+import com.mongodb.BasicDBList
+import org.bson.types.{BasicBSONList, ObjectId}
+import org.edu.utn.newspark.lsa.{Group, TermScore}
 
 final case class NewsMeta(id: ObjectId, title: String, tag: String, imageUrl: String, date: Date)
 final case class News(meta: NewsMeta, content: String)
@@ -46,14 +46,45 @@ final case class MongoGroupContent(
   groupedDate: Date,
   conceptScores: Seq[ConceptScore],
   docScores: Seq[DocScore]
+)
+
+final case class MongoGroupContentToRetrieve(
+  concepts: Seq[String],
+  category: String,
+  image: String,
+  articles: Seq[ObjectId],
+  viewsCount: Int,
+  articlesCount: Int,
+  minDate: Date,
+  maxDate: Date,
+  groupedDate: Date,
+  conceptScores: BasicBSONList,
+  docScores: BasicBSONList
 ) {
   def toGroup: Group =
     (
-      conceptScores.map(ConceptScore.unapply(_).get),
-      docScores.map{ doc =>
-        val (id, title, tag, imageUrl, date, score, index) = DocScore.unapply(doc).get
-        (NewsMeta(id, title, tag, imageUrl, date), score, index)
-      },
-      image
+      {
+        val arr = conceptScores.toArray()
+        (0 until arr.length).foldLeft(Seq[TermScore]()){ case (acum, i) =>
+          val elem = arr(i).asInstanceOf[BasicDBList]
+          acum :+ (elem.get(0).asInstanceOf[String], elem.get(1).asInstanceOf[Double], elem.get(2).asInstanceOf[Int])
+        }
+      }, // TermScores
+      {
+        val arr = docScores.toArray()
+        (0 until arr.length).foldLeft(Seq[org.edu.utn.newspark.lsa.DocScore]()){ case (acum, i) =>
+          val elem = arr(i).asInstanceOf[BasicDBList]
+          acum :+ (NewsMeta(
+            id = elem.get(0).asInstanceOf[ObjectId],
+            title = elem.get(1).asInstanceOf[String],
+            tag = elem.get(2).asInstanceOf[String],
+            imageUrl = elem.get(3).asInstanceOf[String],
+            date = elem.get(4).asInstanceOf[Date]),
+            elem.get(5).asInstanceOf[Double],
+            elem.get(6).asInstanceOf[Long])
+        }
+      }, // DocScores
+      image, // ImageUrl
+      true // Persisted
     )
 }

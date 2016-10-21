@@ -47,10 +47,10 @@ trait NewsFixture {
   val docScoresRonaldo = List(docRonaldo)
 
   // Groups
-  val messiGroup1: Group = (termScoresMessi1, docScoresMessi1, newsMessi1.imageUrl)
-  val messiGroup1B: Group = (termScoresMessi1B, docScoresMessi1B, newsMessi1.imageUrl)
-  val messiGroup2: Group = (termScoresMessi2, docScoresMessi2, newsMessi2.imageUrl)
-  val ronaldoGroup: Group = (termScoresRonaldo, docScoresRonaldo, newsRonaldo.imageUrl)
+  val messiGroup1: Group = (termScoresMessi1, docScoresMessi1, newsMessi1.imageUrl, false)
+  val messiGroup1B: Group = (termScoresMessi1B, docScoresMessi1B, newsMessi1.imageUrl, false)
+  val messiGroup2: Group = (termScoresMessi2, docScoresMessi2, newsMessi2.imageUrl, false)
+  val ronaldoGroup: Group = (termScoresRonaldo, docScoresRonaldo, newsRonaldo.imageUrl, false)
 
   val groups: List[Group] = List(messiGroup1, messiGroup1B, messiGroup2, ronaldoGroup)
 }

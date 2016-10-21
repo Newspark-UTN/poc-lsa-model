@@ -3,7 +3,6 @@ package org.edu.utn.newspark.provider
 import java.util.Date
 
 import com.mongodb.casbah.Imports._
-import com.novus.salat.dao.SalatDAO
 import org.edu.utn.newspark.lemmatizer._
 import org.edu.utn.newspark.lsa._
 
@@ -18,9 +17,9 @@ trait Stopwords {
 }
 
 trait MongoConfiguration {
-//  val uri = MongoClientURI("mongodb://admin:newspark@ds033036.mlab.com:33036/newspark")
-//  val mongoClient =  MongoClient(uri)
-val mongoClient = MongoClient("localhost", 27017)
+  val uri = MongoClientURI("mongodb://admin:newspark@ds033036.mlab.com:33036/newspark")
+  val mongoClient =  MongoClient(uri)
+//val mongoClient = MongoClient("mongo.newspark.local", 27017)
   val db = mongoClient("newspark")
   def collection: MongoCollection
 }
@@ -67,7 +66,7 @@ class MongoGroupDAO extends MongoConfiguration {
 
   override val collection = db("groups")
 
-  def retrieve = collection.find().map(obj => grater[MongoGroupContent].asObject(obj).toGroup).toList
+  def retrieve: List[MongoGroupContentToRetrieve] = collection.find().map(obj => grater[MongoGroupContentToRetrieve].asObject(obj)).toList
 
   def save(group: MongoGroup) = {
     collection.save[MongoGroup](group)

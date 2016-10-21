@@ -6,11 +6,11 @@ import com.novus.salat._
 import com.novus.salat.global._
 import org.edu.utn.newspark.lemmatizer._
 import org.edu.utn.newspark.lsa._
+import org.edu.utn.newspark.provider.MongoGroupDAO._
 import org.edu.utn.newspark.provider.{MongoGroupDAO, MongoNewsDAO}
 import org.edu.utn.newspark.utils.NewsFixture
 import org.specs2.mutable.Specification
 import org.specs2.specification.{AfterAll, BeforeEach}
-import MongoGroupDAO._
 
 class MongoItSpec extends Specification with NewsFixture with BeforeEach with AfterAll {
 
@@ -105,7 +105,7 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
     "return the inserted group" in {
       val insert = groupsDAO.save(mongoGroup)
       insert.wasAcknowledged() must beTrue
-      groupsDAO.retrieve.headOption must beSome(mongoGroup.group)
+      groupsDAO.retrieve.headOption.map(_.toGroup) must beSome(mongoGroup.group)
     }
   }
 

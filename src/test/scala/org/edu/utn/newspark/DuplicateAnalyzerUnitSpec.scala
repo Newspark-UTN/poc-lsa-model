@@ -34,7 +34,7 @@ class DuplicateAnalyzerUnitSpec extends Specification with NewsFixture {
     "return the max for the tuples" in {
       val (terms, _) = invertedIndexValue(termScoresMessi1B, docScoresMessi1B)
 
-      maxTermScores must have size 1
+      maxTermScores must have size 3
       maxTermScores.values.head must beEqualTo(terms)
     }
     "return empty for an empty inverted index" in {

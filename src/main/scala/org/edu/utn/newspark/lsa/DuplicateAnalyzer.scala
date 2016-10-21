@@ -22,7 +22,7 @@ object DuplicateAnalyzer {
     val documentInvertedIndex: mutable.HashMap[NewsMeta, List[(Seq[Term], Double)]] = invertedMetaConceptScoreIndex(groups)
     val maxScoreTermsForNews: mutable.HashMap[NewsMeta, Seq[Term]] = invertedToMaxTermScores(documentInvertedIndex)
 
-    val (groupsToSelectMaxScore, groupsToKeepIntact) = groups.partition{ case (_, docs, _) =>
+    val (groupsToSelectMaxScore, groupsToKeepIntact) = groups.partition{ case (_, docs, _, _) =>
       docs.map(_._1).exists(maxScoreTermsForNews.keySet.contains)
     }
 
@@ -41,10 +41,10 @@ object DuplicateAnalyzer {
   def invertedMetaConceptScoreIndex(groups: Seq[Group]): mutable.HashMap[NewsMeta, List[(Seq[Term], Double)]] = {
     groups.foldLeft(new mutable.HashMap[NewsMeta, List[(Seq[Term], Double)]]()) {
       case (actualMap: mutable.HashMap[NewsMeta, List[(Seq[Term], Double)]], group: Group) =>
-        val (termScores, docScores, image) = group
+        val (termScores, docScores, image, persisted) = group
         val documents: Seq[NewsMeta] = docScores.map(_._1)
         documents.foreach { case meta: NewsMeta =>
-          val scoreToAdd: (Seq[Term], Double) = (termScores.map(_._1), termScores.map(_._2).sum + docScores.map(_._2).sum)
+          val scoreToAdd: (Seq[Term], Double) = (termScores.map(_._1), if(persisted) Int.MaxValue else termScores.map(_._2).sum + docScores.map(_._2).sum)
           actualMap += meta -> (scoreToAdd :: actualMap.getOrElse(meta, Nil))
         }
         actualMap
@@ -60,7 +60,7 @@ object DuplicateAnalyzer {
    */
   def invertedToMaxTermScores(invertedIndex: mutable.HashMap[NewsMeta, List[(Seq[Term], Double)]]): mutable.HashMap[NewsMeta, Seq[Term]] = {
     invertedIndex collect {
-      case (newsMeta, conceptScores) if conceptScores.length > 1 =>
+      case (newsMeta, conceptScores) if conceptScores.nonEmpty =>
         val (maxScoreTermGroup, _) = conceptScores.maxBy{ case (_, score) => score }
         newsMeta -> maxScoreTermGroup
     }
@@ -76,7 +76,7 @@ object DuplicateAnalyzer {
    */
   def keepOnlyWithMaxScore(potentialGroups: Seq[Group], maxScores: mutable.HashMap[NewsMeta, Seq[String]]): Seq[Group] = {
     val newsToKeep = maxScores.keySet
-    potentialGroups.filter { case (terms, docs, _) =>
+    potentialGroups.filter { case (terms, docs, _, _) =>
       docs
         .find{ case (meta, _, _) => newsToKeep.contains(meta)}
         .flatMap{ case (meta, _, _) => maxScores.get(meta)}
