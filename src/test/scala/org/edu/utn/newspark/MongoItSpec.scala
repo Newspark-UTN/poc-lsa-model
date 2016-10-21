@@ -1,21 +1,23 @@
 package org.edu.utn.newspark
 
-import java.util.Date
 
 import com.mongodb.casbah.Imports._
 import com.novus.salat._
 import com.novus.salat.global._
-import org.edu.utn.newspark.lemmatizer.{MongoContent, MongoGroup, MongoGroupContent}
+import org.edu.utn.newspark.lemmatizer._
 import org.edu.utn.newspark.lsa._
+import org.edu.utn.newspark.provider.MongoGroupDAO._
 import org.edu.utn.newspark.provider.{MongoGroupDAO, MongoNewsDAO}
 import org.edu.utn.newspark.utils.NewsFixture
 import org.specs2.mutable.Specification
 import org.specs2.specification.{AfterAll, BeforeEach}
-import MongoGroupDAO._
 
 class MongoItSpec extends Specification with NewsFixture with BeforeEach with AfterAll {
 
   val twoDaysBeforeNow = now.addDays(-2)
+
+  val newsDAO = new MongoNewsDAO
+  val groupsDAO = new MongoGroupDAO
 
   implicit val MongoContentSerializer: MongoContent => DBObject = content =>
     MongoDBObject(
@@ -57,7 +59,8 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
     category = category,
     minDate = now,
     maxDate = now,
-    groupedDate = now
+    groupedDate = now,
+    group = messiGroup1
   )
 
   val mongoGroupContent = MongoGroupContent(
@@ -69,11 +72,10 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
     articlesCount = 1,
     minDate = now,
     maxDate = now,
-    groupedDate = now
+    groupedDate = now,
+    conceptScores = ConceptScore.fromGroup(messiGroup1),
+    docScores = DocScore.fromGroup(messiGroup1)
   )
-
-  val newsDAO = new MongoNewsDAO
-  val groupsDAO = new MongoGroupDAO
 
   def saveMongoContent(mongoContent: MongoContent) = {
     val insert = newsDAO.collection.insert(mongoContent)
@@ -99,10 +101,11 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
     }
   }
 
-  "A request to save a group" should {
-    "save the group correctly" in {
-      val insert = groupsDAO.collection.insert(mongoGroup)
+  "A request to get groups" should {
+    "return the inserted group" in {
+      val insert = groupsDAO.save(mongoGroup)
       insert.wasAcknowledged() must beTrue
+      groupsDAO.retrieve.headOption.map(_.toGroup) must beSome(mongoGroup.group)
     }
   }
 

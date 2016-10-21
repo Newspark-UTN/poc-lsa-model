@@ -25,10 +25,11 @@ package object lsa {
   type Index = Int
   type IDF = Double
   type TF_IDF = Double
+  type Persisted = Boolean
   type SVD = SingularValueDecomposition[RowMatrix, Matrix]
   type TermScore = (String, Double, Int)
   type DocScore = (NewsMeta, Double, Long)
-  type Group = (Seq[TermScore], Seq[DocScore], ImageUrl)
+  type Group = (Seq[TermScore], Seq[DocScore], ImageUrl, Persisted)
 
   /**
    * Removes accents from words, which are really common in Spanish.
