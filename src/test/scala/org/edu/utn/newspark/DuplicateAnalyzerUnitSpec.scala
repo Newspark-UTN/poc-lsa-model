@@ -33,9 +33,10 @@ class DuplicateAnalyzerUnitSpec extends Specification with NewsFixture {
   "A request to get the document terms by max score map" should {
     "return the max for the tuples" in {
       val (terms, _) = invertedIndexValue(termScoresMessi1B, docScoresMessi1B)
+      val (termsMessi2, _) = invertedIndexValue(termScoresMessi2, docScoresMessi2)
 
       maxTermScores must have size 3
-      maxTermScores.values.head must beEqualTo(terms)
+      maxTermScores.values.head must beAnyOf(terms, termsMessi2)
     }
     "return empty for an empty inverted index" in {
       invertedToMaxTermScores(new mutable.HashMap[NewsMeta, List[(Seq[String], Double)]]()) must beEmpty
