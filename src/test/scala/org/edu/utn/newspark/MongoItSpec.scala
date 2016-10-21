@@ -105,7 +105,7 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
     "return the inserted group" in {
       val insert = groupsDAO.save(mongoGroup)
       insert.wasAcknowledged() must beTrue
-      groupsDAO.retrieve.headOption.map(_.toGroup) must beSome(mongoGroup.group)
+      groupsDAO.retrieve.headOption.map(_.toGroup) must beSome(mongoGroup.group.copy(_4 = true))
     }
   }
 
