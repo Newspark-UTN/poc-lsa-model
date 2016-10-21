@@ -14,7 +14,7 @@ trait NewsFixture {
   val now = new Date
 
   def generateObjId = {
-    Thread.sleep(2000)
+    Thread.sleep(20)
     new ObjectId(new Date)
   }
   def generateNewsMeta(title: String) = NewsMeta(generateObjId, title, "Deportes", "the image url", now)

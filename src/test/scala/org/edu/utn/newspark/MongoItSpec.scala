@@ -93,6 +93,7 @@ class MongoItSpec extends Specification with NewsFixture with BeforeEach with Af
         saveMongoContent(mongoContent)
         val find = newsDAO.collection.find(MongoDBObject("content" -> mongoContent.content)).map(obj => grater[MongoContent].asObject(obj).toNews).toList
         val news = find.headOption
+        newsDAO.collection.remove(mongoContent)
         news.map(_.content).getOrElse("") ==== mongoContent.content
       }
     "return correctly if we query by date" in {
